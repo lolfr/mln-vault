@@ -26,6 +26,26 @@ def has_audio(path):
     except Exception:
         return None
 
+def media_duration_s(path):
+    """Duree de la video en secondes, ou None si ffprobe echoue."""
+    try:
+        out=subprocess.run([FFPROBE,"-v","error","-show_entries","format=duration",
+                            "-of","csv=p=0",path], capture_output=True, text=True, timeout=60).stdout.strip()
+        return float(out)
+    except Exception:
+        return None
+
+
+def http_timeout_for(path):
+    """Timeout proportionnel : whisper tourne a ~0.5x temps reel (mesure 20/07/2026,
+    8409 s de video -> 4157 s de traitement). 1.5x = 3x de marge. Plancher 900 s.
+    ffprobe KO -> 3600 s (large, mais borne : on ne veut pas d'attente infinie)."""
+    d = media_duration_s(path)
+    if d is None:
+        return 3600.0
+    return max(900.0, d * 1.5)
+
+
 def mark_silent(item_id):
     con.execute("""INSERT OR REPLACE INTO transcripts(item_id,lang,text,segments_json,model,word_count,created_at,updated_at)
         VALUES(?,?,?,?,?,?,datetime('now'),datetime('now'))""",
@@ -50,7 +70,7 @@ for i,r in enumerate(rows,1):
         continue
     try:
         with open(vid,"rb") as f:
-            resp=httpx.post(HUB, headers={"X-API-Key":tok}, files={"audio":(os.path.basename(vid),f)}, data={"cache":"false"}, timeout=1800)
+            resp=httpx.post(HUB, headers={"X-API-Key":tok}, files={"audio":(os.path.basename(vid),f)}, data={"cache":"false"}, timeout=http_timeout_for(vid))
         if resp.status_code!=200: print("  HTTP",resp.status_code,r["id"],resp.text[:120],flush=True); err+=1; continue
         d=resp.json(); text=d.get("text") or ""; segs=d.get("segments")
         con.execute("""INSERT OR REPLACE INTO transcripts(item_id,lang,text,segments_json,model,word_count,created_at,updated_at)

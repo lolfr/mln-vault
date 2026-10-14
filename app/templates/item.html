@@ -3,7 +3,16 @@
 {% block body %}
 <article class="item">
   <div class="media">
-    {% if it.file_path_preview %}
+    {% if it.item_type == 'video' and it.file_path_master %}
+      <button type="button" class="video-poster" data-stream="{{ url_for('stream', item_id=it.id) }}"
+              data-poster="{{ archive_rel(it.file_path_preview or it.file_path_thumb) if (it.file_path_preview or it.file_path_thumb) else '' }}"
+              aria-label="Lire la vidéo">
+        {% if it.file_path_preview or it.file_path_thumb %}
+          <img src="{{ archive_rel(it.file_path_preview or it.file_path_thumb) }}" alt="{{ it.title }}">
+        {% else %}<div class="noimg big">—</div>{% endif %}
+        <span class="play" aria-hidden="true">▶</span>
+      </button>
+    {% elif it.file_path_preview %}
       <img src="{{ archive_rel(it.file_path_preview) }}" alt="{{ it.title }}">
     {% elif it.file_path_thumb %}
       <img src="{{ archive_rel(it.file_path_thumb) }}" alt="{{ it.title }}">
@@ -54,4 +63,27 @@
     </div>
   </aside>
 </article>
+<style>
+  .video-poster { position: relative; display: block; width: 100%; padding: 0; border: 0;
+                  background: none; cursor: pointer; }
+  .video-poster img { display: block; width: 100%; height: auto; }
+  .video-poster .play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+                        width: 72px; height: 72px; border-radius: 50%; background: rgba(0,0,0,.6);
+                        color: #fff; font-size: 30px; line-height: 72px; text-align: center;
+                        padding-left: 6px; box-sizing: border-box; }
+  .video-poster:hover .play, .video-poster:focus-visible .play { background: rgba(0,0,0,.8); }
+  .media video { display: block; width: 100%; height: auto; background: #000; }
+</style>
+<script>
+  document.querySelectorAll(".video-poster").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const v = document.createElement("video");
+      v.src = btn.dataset.stream;
+      if (btn.dataset.poster) v.poster = btn.dataset.poster;
+      v.controls = true; v.autoplay = true; v.playsInline = true; v.preload = "metadata";
+      btn.replaceWith(v);
+      v.play().catch(() => {});
+    });
+  });
+</script>
 {% endblock %}

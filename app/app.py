@@ -18,7 +18,7 @@ import common  # noqa: E402
 
 from flask import (  # noqa: E402
     Flask, abort, flash, g, redirect, render_template,
-    request, send_from_directory, url_for, jsonify,
+    request, send_file, send_from_directory, url_for, jsonify,
 )
 
 APP_ROOT = Path(__file__).parent
@@ -271,6 +271,28 @@ def open_master(item_id: str):
         return jsonify({"ok": False, "error": "master_missing"}), 404
     subprocess.Popen(["open", "-R", str(full)])  # reveal in Finder
     return jsonify({"ok": True})
+
+
+# ---------- video streaming ----------
+# /media ne sert JAMAIS les masters (voir plus haut). Les vidéos n'ont pas de
+# dérivé lisible : cette route dédiée sert le master d'un item VIDÉO seulement,
+# avec Range (send_file conditional) pour pouvoir avancer dans la lecture.
+@app.route("/stream/<item_id>")
+def stream(item_id: str):
+    db = get_db()
+    row = db.execute(
+        "SELECT file_path_master FROM items WHERE id=? AND item_type='video'",
+        (item_id,),
+    ).fetchone()
+    if not row or not row["file_path_master"]:
+        abort(404)
+    full = (ARCHIVE / row["file_path_master"]).resolve()
+    if common.MASTERS_ROOT.resolve() not in full.parents:
+        abort(403)
+    if not full.exists():
+        abort(404)
+    mimetype = "video/mp4" if full.suffix.lower() in (".mp4", ".m4v") else None
+    return send_file(full, mimetype=mimetype, conditional=True, max_age=3600)
 
 
 # ---------- admin ----------
